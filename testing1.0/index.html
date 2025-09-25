@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultra-Fast Image Upscaler - Browser Native</title>
+    <link rel="stylesheet" href="/styles/main.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container" id="appContainer">
+        
+        <!-- Landing Page State -->
+        <div class="landing-page" id="landingPage">
+            <div class="landing-container">
+                <!-- Left Side - Upload Zone (70% width, full height) -->
+                <div class="upload-section">
+                    <div class="upload-zone" id="uploadZone">
+                        <div class="upload-content" id="uploadContent">
+                            <div class="upload-icon">
+                                <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17,8 12,3 7,8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                            </div>
+                            <h2>Drop your image here</h2>
+                            <p>or <button class="browse-button" id="browseButton">browse files</button> to get started</p>
+                            <div class="upload-hints">
+                                <span>Supports: JPG, PNG, WebP</span>
+                                <span>No size limits • Ultra-fast processing!</span>
+                            </div>
+                        </div>
+                        <!-- Image preview will be shown here -->
+                        <div class="image-preview" id="imagePreview" style="display: none;">
+                            <img id="previewImage" alt="Preview" />
+                            <div class="preview-overlay">
+                                <button class="change-image-btn" id="changeImageBtn">Change Image</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Side - Controls (30% width) -->
+                <div class="controls-section">
+                    <!-- Header -->
+                    <header class="controls-header">
+                        <h1>Ultra-Fast Image Upscaler</h1>
+                        <p>Transform your images with lightning-fast AI upscaling</p>
+                    </header>
+
+                    <!-- Scale Factor Selection -->
+                    <div class="scale-section">
+                        <h3>Scale Factor</h3>
+                        <div class="scale-buttons">
+                            <button class="scale-btn" data-scale="2" id="scale2x">2×</button>
+                            <button class="scale-btn active" data-scale="4" id="scale4x">4×</button>
+                            <button class="scale-btn" data-scale="6" id="scale6x">6×</button>
+                            <button class="scale-btn" data-scale="8" id="scale8x">8×</button>
+                            <button class="scale-btn" data-scale="10" id="scale10x">10×</button>
+                        </div>
+                    </div>
+
+                    <!-- Image Information -->
+                    <div class="image-info-section" id="imageInfoSection" style="display: none;">
+                        <h3>Image Details</h3>
+                        <div class="image-info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Dimensions</span>
+                                <span class="info-value" id="imageDimensions">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">File Size</span>
+                                <span class="info-value" id="imageFileSize">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Format</span>
+                                <span class="info-value" id="imageFormat">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Aspect Ratio</span>
+                                <span class="info-value" id="imageAspectRatio">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Start Button (moved to bottom) -->
+                    <div class="sidebar-bottom">
+                        <button class="start-button" id="startButton" disabled>
+                            <svg class="button-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="5,3 19,12 5,21"/>
+                            </svg>
+                            <div class="loading-spinner"></div>
+                            <span class="button-text">Start Upscaling</span>
+                        </button>
+                    </div>
+
+                    <!-- Progress Container -->
+                    <div class="progress-container" id="progressContainer" style="display: none;">
+                        <div class="progress-header">
+                            <h4>Processing Image...</h4>
+                            <span id="progressPercent">0%</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="progressBar"></div>
+                        </div>
+                        <div class="progress-text" id="progressText">Initializing...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden file inputs -->
+            <input type="file" id="fileInput" accept="image/*" hidden>
+            <input type="file" id="file-input" accept="image/*" hidden>
+        </div>
+
+        <!-- Result Page State -->
+        <div class="result-page" id="resultPage" style="display: none;">
+            <div class="result-container">
+                <!-- Left Side - Upscaled Image Display -->
+                <div class="result-image-section">
+                    <div class="hero-image-container">
+                        <canvas id="upscaledCanvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Right Side - Result Controls Sidebar -->
+                <div class="result-controls-section">
+                    <!-- Original Image Thumbnail -->
+                    <div class="result-thumbnail-section">
+                        <div class="original-thumbnail" id="originalThumbnail">
+                            <canvas id="originalCanvas"></canvas>
+                        </div>
+                        <div class="thumbnail-label">Original Image</div>
+                    </div>
+
+                    <!-- Original Image Information -->
+                    <div class="result-info-section">
+                        <h3>Original Details</h3>
+                        <div class="result-info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Dimensions</span>
+                                <span class="info-value" id="originalDimensions">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">File Size</span>
+                                <span class="info-value" id="originalFileSize">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upscaled Image Information -->
+                    <div class="result-info-section">
+                        <h3>Upscaled Details</h3>
+                        <div class="result-info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Scale Factor</span>
+                                <span class="info-value" id="scaleFactorStat">4×</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Dimensions</span>
+                                <span class="info-value" id="dimensionsStat">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">File Size</span>
+                                <span class="info-value" id="upscaledFileSizeStat">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Processing Time</span>
+                                <span class="info-value" id="processingTimeStat">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                        <!-- Quality Control Section -->
+                        <div class="quality-control-section" id="qualityControlSection">
+                            <div class="quality-header">
+                                <h4>Quality vs Speed</h4>
+                                <div class="quality-info">
+                                    <span class="quality-value" id="qualityValue">10</span>
+                                    <span class="quality-label" id="qualityLabel">Lossless</span>
+                                </div>
+                            </div>
+                            
+                            <div class="quality-slider-container">
+                                <input type="range" 
+                                       class="quality-slider" 
+                                       id="qualitySlider" 
+                                       min="1" 
+                                       max="10" 
+                                       value="10" 
+                                       step="1">
+                                <div class="slider-labels">
+                                    <span class="slider-label-left">1 - Fast</span>
+                                    <span class="slider-label-right">10 - Lossless</span>
+                                </div>
+                            </div>
+
+                            <!-- Format Selection -->
+                            <div class="format-selection">
+                                <h4>📁 Export Format</h4>
+                                <div class="format-options">
+                                    <label class="format-option">
+                                        <input type="radio" name="exportFormat" value="png" checked>
+                                        <div class="format-info">
+                                            <div class="format-name">PNG</div>
+                                            <div class="format-desc">Lossless, large files</div>
+                                        </div>
+                                    </label>
+                                    
+                                    <label class="format-option">
+                                        <input type="radio" name="exportFormat" value="jpeg">
+                                        <div class="format-info">
+                                            <div class="format-name">JPEG</div>
+                                            <div class="format-desc">Good compression, compatible</div>
+                                        </div>
+                                    </label>
+                                    
+                                    <label class="format-option">
+                                        <input type="radio" name="exportFormat" value="avif">
+                                        <div class="format-info">
+                                            <div class="format-name">AVIF</div>
+                                            <div class="format-desc">Best compression, modern</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Real-time Estimates -->
+                            <div class="download-estimates">
+                                <div class="estimate-row">
+                                    <div class="estimate-item">
+                                        <span class="estimate-label">File Size:</span>
+                                        <span class="estimate-value" id="estimatedFileSize">~585 MB</span>
+                                    </div>
+                                    <div class="estimate-item">
+                                        <span class="estimate-label">Download Time:</span>
+                                        <span class="estimate-value" id="estimatedDownloadTime">~21s</span>
+                                    </div>
+                                </div>
+                                <div class="estimate-row">
+                                    <div class="estimate-item">
+                                        <span class="estimate-label">Processing Time:</span>
+                                        <span class="estimate-value" id="estimatedProcessingTime">~18s</span>
+                                    </div>
+                                    <div class="estimate-item">
+                                        <span class="estimate-label">Total Time:</span>
+                                        <span class="estimate-value total-time" id="estimatedTotalTime">~21s</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Simplified Quality Info -->
+                            <div class="quality-description" id="qualityDescription">
+                                <p>Adjust quality vs speed trade-off for your needs.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="result-actions">
+                        <button class="result-action-btn primary" id="downloadBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7,10 12,15 17,10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Download Image
+                        </button>
+                        
+                        <button class="result-action-btn secondary" id="saveBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                <polyline points="17,21 17,13 7,13 7,21"/>
+                                <polyline points="7,3 7,8 15,8"/>
+                            </svg>
+                            Save Project
+                        </button>
+                        
+                        <button class="result-action-btn tertiary" id="newImageBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17,8 12,3 7,8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            New Image
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Modal -->
+        <div class="modal-overlay" id="errorModal" style="display: none;">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>Error</h3>
+                    <button class="modal-close" id="modalClose">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p id="errorMessage"></p>
+                </div>
+                <div class="modal-footer">
+                    <button class="primary-btn" id="errorOkBtn">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+    <script src="/diagnostic.js"></script>
+</body>
+</html> 

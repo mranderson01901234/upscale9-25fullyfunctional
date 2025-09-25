@@ -1,0 +1,43 @@
+{
+  "name": "onnx-realesrgan-web",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Real-ESRGAN image enhancement using ONNX.js for web browsers",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "node node_modules/vite/bin/vite.js --host",
+    "build": "npm run build:wasm && node node_modules/vite/bin/vite.js build",
+    "build:wasm": "cd wasm-upscaler && ./build.sh",
+    "dev:wasm": "npm run build:wasm && npm run dev",
+    "preview": "node node_modules/vite/bin/vite.js preview",
+    "download-model": "node scripts/download-model.js",
+    "server": "node server-enhanced-simple.js",
+    "dev:full": "concurrently \"npm run server\" \"npm run dev\""
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "avif.js": "^0.2.0",
+    "compression": "^1.7.4",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "multer": "^1.4.5-lts.1",
+    "onnxruntime-web": "^1.16.3",
+    "sharp": "^0.34.4",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "vite": "^5.4.20"
+  },
+  "keywords": [
+    "onnx",
+    "real-esrgan",
+    "image-enhancement",
+    "super-resolution",
+    "web-ml",
+    "server-side-composition"
+  ],
+  "author": "ONNX Real-ESRGAN Web",
+  "license": "MIT"
+}

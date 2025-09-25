@@ -1,4 +1,4 @@
-export class ProEngineInterface {
+class ProEngineInterface {
     constructor() {
         this.webEngineUrl = 'http://localhost:3002';
         
@@ -1112,6 +1112,8 @@ export class ProEngineInterface {
             aiEnhancementAvailable: this.desktopServiceAvailable
         };
     }
+}
+
     async fetchSessionResult(sessionId) {
         try {
             const response = await fetch(`${this.desktopServiceUrl}/api/session-result/${sessionId}`);
@@ -1124,4 +1126,3 @@ export class ProEngineInterface {
             throw error;
         }
     }
-}

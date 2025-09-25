@@ -1,0 +1,23 @@
+Web Application: Browser-Based Image Upscaler (Pure Upscaling Mode)
+
+User Experience Summary:
+-----------------------
+- The application allows users to upscale images directly in the browser with no installation or account required.
+- Users simply upload an image (JPG, PNG, WebP), and the app processes it automatically using pure upscaling (no enhancement options or settings to adjust).
+- The interface is minimal: users see only upload, progress, and download steps.
+- After upload, upscaling begins instantly and completes rapidly (typically within a few hundred milliseconds for standard images, e.g., 512x512px).
+- Once processing is complete, the upscaled image is displayed and can be downloaded at full resolution.
+- There are no visible model names, technical jargon, or advanced controls—just a streamlined, fast upscaling workflow.
+
+Performance Notes:
+------------------
+- Upscaling speed is typically in the range of 100–500 ms for standard images (512x512px to 1024x1024px) on a modern desktop browser.
+- Processing time may vary based on image size and device performance, but the app is optimized for near-instant results.
+- All processing is done client-side in the browser; no data is sent to a server.
+
+Intended Use:
+-------------
+- Designed for users who want fast, simple image upscaling with no configuration or technical knowledge required.
+- Ideal for quick previews, enlarging images for presentations, or preparing assets for further editing.
+
+No model names or technical implementation details are exposed to the user. 

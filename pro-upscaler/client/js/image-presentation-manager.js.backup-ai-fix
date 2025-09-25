@@ -3,7 +3,6 @@
  * Enterprise-grade image presentation system for professional UI
  */
 
-import { ProEngineInterface } from './pro-engine-interface.js';
 export class ImagePresentationManager {
   constructor() {
     this.currentResult = null;
@@ -53,7 +52,7 @@ export class ImagePresentationManager {
       }
       
       // Initialize ProEngine interface
-      if (ProEngineInterface) {
+      if (typeof ProEngineInterface !== 'undefined') {
         this.proEngineInterface = new ProEngineInterface();
         // Check if ProEngine is actually available
         if (this.proEngineInterface && !this.proEngineInterface.isAvailable) {
@@ -327,7 +326,7 @@ export class ImagePresentationManager {
   getProcessingSettings() {
     const scaleFactor = document.getElementById('scale-factor')?.value || '2x';
     const outputFormat = document.getElementById('output-format')?.value || 'jpeg';
-    const aiEnhancement = document.getElementById('ai-enhancement-toggle')?.checked || true;
+    const aiEnhancement = document.getElementById('ai-enhancement-toggle')?.checked || false;
     const enhancementType = document.getElementById('enhancement-type')?.value || 'super-resolution';
     const faceEnhancement = document.getElementById('face-enhancement-toggle')?.checked || false;
     const artifactRemoval = document.getElementById('artifact-removal-toggle')?.checked || false;
@@ -1619,8 +1618,8 @@ export class ImagePresentationManager {
     // Create a result object compatible with displayEnhancedResult
     // CORS FIX: Avoid canvas.toDataURL() for cross-origin images to prevent security errors
     const result = {
-      width: finalUpscaledDimensions.width,
-      height: finalUpscaledDimensions.height,
+      width: enhancedDimensions.width,
+      height: enhancedDimensions.height,
       dataUrl: enhancedImage.src, // Use image source directly for cross-origin compatibility
       imageElement: enhancedImage, // Store the image element for display
       isAIEnhanced: aiEnhanced,

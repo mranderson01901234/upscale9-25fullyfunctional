@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Fix Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a1a; color: white; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #333; border-radius: 8px; }
+        button { padding: 10px 15px; margin: 5px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0052a3; }
+        .user-info { background: #2a2a2a; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .hidden { display: none !important; }
+        #signed-out-state { background: #4a2a2a; padding: 10px; border-radius: 4px; }
+        #signed-in-state { background: #2a4a2a; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Authentication Fix Test</h1>
+    
+    <div class="test-section">
+        <h2>Auth State</h2>
+        <div id="signed-out-state">
+            <p>You are signed out</p>
+            <button id="signin-button">Sign In</button>
+            <button id="signup-button">Sign Up</button>
+        </div>
+        <div id="signed-in-state" class="hidden">
+            <p>You are signed in!</p>
+            <div class="user-info">
+                <p>Email: <span id="user-email">Loading...</span></p>
+                <p>Tier: <span id="user-tier">Loading...</span></p>
+            </div>
+            <button id="signout-button">Sign Out</button>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Debug Info</h2>
+        <div id="debug-info">
+            <p>Auth Service Status: <span id="auth-status">Loading...</span></p>
+            <p>Current User: <span id="current-user">None</span></p>
+            <p>User Profile: <span id="user-profile">None</span></p>
+        </div>
+        <button onclick="refreshDebugInfo()">Refresh Debug Info</button>
+    </div>
+
+    <script src="pro-upscaler/client/js/supabase-auth-service.js"></script>
+    <script>
+        // Test authentication functionality
+        function refreshDebugInfo() {
+            const authStatus = document.getElementById('auth-status');
+            const currentUser = document.getElementById('current-user');
+            const userProfile = document.getElementById('user-profile');
+            
+            if (window.authService) {
+                authStatus.textContent = 'Available';
+                currentUser.textContent = window.authService.currentUser ? 
+                    window.authService.currentUser.email : 'None';
+                userProfile.textContent = window.authService.userProfile ? 
+                    JSON.stringify(window.authService.userProfile, null, 2) : 'None';
+            } else {
+                authStatus.textContent = 'Not Available';
+            }
+        }
+        
+        // Update UI function to test our fixes
+        function updateAuthenticationUI(isSignedIn, user = null) {
+            console.log('🧪 Test updateAuthenticationUI:', isSignedIn, user);
+            
+            const signedOutState = document.getElementById('signed-out-state');
+            const signedInState = document.getElementById('signed-in-state');
+            const userEmail = document.getElementById('user-email');
+            const userTier = document.getElementById('user-tier');
+
+            if (isSignedIn && user) {
+                signedOutState.classList.add('hidden');
+                signedInState.classList.remove('hidden');
+                
+                if (userEmail) {
+                    const displayEmail = user.email || user.user?.email || 'User';
+                    userEmail.textContent = displayEmail;
+                    console.log('🧪 Set user email to:', displayEmail);
+                }
+                
+                if (userTier) {
+                    const tier = user.subscription_tier || user.tier || user.user_metadata?.tier || user.app_metadata?.tier || 'free';
+                    const displayTier = tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase();
+                    userTier.textContent = displayTier;
+                    console.log('🧪 Set user tier to:', displayTier);
+                }
+            } else {
+                signedOutState.classList.remove('hidden');
+                signedInState.classList.add('hidden');
+            }
+            
+            refreshDebugInfo();
+        }
+        
+        // Override the auth service UI update to use our test function
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (window.authService) {
+                    // Override the UI update methods to use our test function
+                    const originalUpdateUIAfterSignIn = window.authService.updateUIAfterSignIn.bind(window.authService);
+                    const originalUpdateUIAfterSignOut = window.authService.updateUIAfterSignOut.bind(window.authService);
+                    
+                    window.authService.updateUIAfterSignIn = function() {
+                        console.log('🧪 Test: updateUIAfterSignIn called');
+                        originalUpdateUIAfterSignIn();
+                        updateAuthenticationUI(true, {
+                            ...this.currentUser,
+                            ...(this.userProfile || {}),
+                            email: this.currentUser?.email || this.userProfile?.email,
+                            subscription_tier: this.userProfile?.subscription_tier || 'free',
+                            tier: this.userProfile?.subscription_tier || 'free'
+                        });
+                    };
+                    
+                    window.authService.updateUIAfterSignOut = function() {
+                        console.log('🧪 Test: updateUIAfterSignOut called');
+                        originalUpdateUIAfterSignOut();
+                        updateAuthenticationUI(false);
+                    };
+                    
+                    // Set up button handlers
+                    document.getElementById('signin-button').addEventListener('click', () => {
+                        if (window.authService.showSignInModal) {
+                            window.authService.showSignInModal();
+                        }
+                    });
+                    
+                    document.getElementById('signup-button').addEventListener('click', () => {
+                        if (window.authService.showSignUpModal) {
+                            window.authService.showSignUpModal();
+                        }
+                    });
+                    
+                    document.getElementById('signout-button').addEventListener('click', () => {
+                        if (window.authService.signOut) {
+                            window.authService.signOut();
+                        }
+                    });
+                    
+                    refreshDebugInfo();
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html> 

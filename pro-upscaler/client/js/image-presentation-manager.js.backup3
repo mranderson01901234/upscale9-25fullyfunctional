@@ -333,7 +333,7 @@ export class ImagePresentationManager {
     const artifactRemoval = document.getElementById('artifact-removal-toggle')?.checked || false;
 
     return {
-      scaleFactor: parseInt(scaleFactor),
+      scaleFactor: parseInt(scaleFactor.replace("x", "")) || 2,
       outputFormat,
       aiEnhancement,
       enhancementType,
@@ -1150,7 +1150,7 @@ export class ImagePresentationManager {
 
     // FIXED: Use the user's actual selected scale factor from UI, not calculated ratio
     const scaleFactorElement = document.getElementById('scale-factor');
-    const userSelectedScaleFactor = scaleFactorElement ? parseInt(scaleFactorElement.value) : settings.scaleFactor;
+    const userSelectedScaleFactor = scaleFactorElement ? parseInt(scaleFactorElement.value.replace("x", "")) || settings.scaleFactor : settings.scaleFactor;
 
     // Update metrics with AI enhancement info
     const metrics = {
@@ -1619,8 +1619,8 @@ export class ImagePresentationManager {
     // Create a result object compatible with displayEnhancedResult
     // CORS FIX: Avoid canvas.toDataURL() for cross-origin images to prevent security errors
     const result = {
-      width: finalUpscaledDimensions.width,
-      height: finalUpscaledDimensions.height,
+      width: enhancedDimensions.width,
+      height: enhancedDimensions.height,
       dataUrl: enhancedImage.src, // Use image source directly for cross-origin compatibility
       imageElement: enhancedImage, // Store the image element for display
       isAIEnhanced: aiEnhanced,

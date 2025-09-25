@@ -1,0 +1,159 @@
+/**
+ * AI Enhancement Status Fix
+ * Ensures AI enhancement status is properly maintained throughout the display pipeline
+ */
+
+console.log('🔧 Loading AI Enhancement Status Fix...');
+
+// Track AI enhancement status globally
+let globalAIEnhancementStatus = false;
+let lastProcessingWasAIEnhanced = false;
+
+// Fix the AI enhancement status passing issue
+const fixAIEnhancementStatus = () => {
+    console.log('🎭 Applying AI Enhancement Status Fix...');
+    
+    // Check if ImagePresentationManager exists
+    if (typeof ImagePresentationManager !== 'undefined' && ImagePresentationManager.prototype) {
+        const originalDisplayEnhancedResult = ImagePresentationManager.prototype.displayEnhancedResult;
+        
+        // Override displayEnhancedResult to maintain AI enhancement status
+        ImagePresentationManager.prototype.displayEnhancedResult = function(result, aiEnhanced = false) {
+            console.log(`🎭 displayEnhancedResult called with aiEnhanced: ${aiEnhanced}`);
+            
+            // Update global status
+            globalAIEnhancementStatus = aiEnhanced;
+            lastProcessingWasAIEnhanced = aiEnhanced;
+            
+            // Store AI enhancement status in the result object
+            if (result) {
+                result.isAIEnhanced = aiEnhanced;
+                result.enhancementType = aiEnhanced ? 'face-enhancement' : 'standard';
+            }
+            
+            // Call original method
+            const result_return = originalDisplayEnhancedResult.call(this, result, aiEnhanced);
+            
+            // Ensure panel title is set correctly
+            setTimeout(() => {
+                const panelTitle = document.querySelector('.enhanced-panel .panel-title');
+                if (panelTitle) {
+                    if (aiEnhanced) {
+                        panelTitle.textContent = 'AI Enhanced Result';
+                        console.log('✅ Panel title set to: AI Enhanced Result');
+                    } else {
+                        panelTitle.textContent = 'Upscaled Result';
+                        console.log('✅ Panel title set to: Upscaled Result');
+                    }
+                }
+                
+                // Ensure enhanced info shows correct status
+                const enhancedInfo = document.getElementById('enhanced-info');
+                if (enhancedInfo && result) {
+                    const megapixels = ((result.width * result.height) / 1000000).toFixed(1);
+                    if (aiEnhanced) {
+                        enhancedInfo.textContent = `${result.width}×${result.height} • ${megapixels}MP • AI Enhanced`;
+                        console.log('✅ Enhanced info set to: AI Enhanced');
+                    } else {
+                        enhancedInfo.textContent = `${result.width}×${result.height} • ${megapixels}MP`;
+                        console.log('✅ Enhanced info set to: Standard');
+                    }
+                }
+            }, 100);
+            
+            return result_return;
+        };
+        
+        console.log('✅ AI Enhancement Status Fix applied to ImagePresentationManager');
+    }
+    
+    // Check if ProEngineInterface exists
+    if (typeof ProEngineInterface !== 'undefined' && ProEngineInterface.prototype) {
+        const originalDisplayEnhancedInCanvas = ProEngineInterface.prototype.displayEnhancedInCanvas;
+        
+        // Override displayEnhancedInCanvas to ensure AI status is passed correctly
+        ProEngineInterface.prototype.displayEnhancedInCanvas = async function(sessionId, wasAiEnhanced = false) {
+            console.log(`🎭 ProEngine displayEnhancedInCanvas called with wasAiEnhanced: ${wasAiEnhanced}`);
+            
+            // Update global status
+            globalAIEnhancementStatus = wasAiEnhanced;
+            lastProcessingWasAIEnhanced = wasAiEnhanced;
+            
+            // Call original method
+            const result = await originalDisplayEnhancedInCanvas.call(this, sessionId, wasAiEnhanced);
+            
+            // Ensure the status is maintained after display
+            setTimeout(() => {
+                if (wasAiEnhanced) {
+                    const panelTitle = document.querySelector('.enhanced-panel .panel-title');
+                    if (panelTitle) {
+                        panelTitle.textContent = 'AI Enhanced Result';
+                        console.log('✅ ProEngine: Panel title set to: AI Enhanced Result');
+                    }
+                    
+                    const enhancedInfo = document.getElementById('enhanced-info');
+                    if (enhancedInfo) {
+                        // Try to get dimensions from the displayed image
+                        const enhancedImage = document.getElementById('enhanced-image');
+                        if (enhancedImage && enhancedImage.naturalWidth) {
+                            const megapixels = ((enhancedImage.naturalWidth * enhancedImage.naturalHeight) / 1000000).toFixed(1);
+                            enhancedInfo.textContent = `${enhancedImage.naturalWidth}×${enhancedImage.naturalHeight} • ${megapixels}MP • AI Enhanced`;
+                            console.log('✅ ProEngine: Enhanced info set to: AI Enhanced');
+                        }
+                    }
+                }
+            }, 200);
+            
+            return result;
+        };
+        
+        console.log('✅ AI Enhancement Status Fix applied to ProEngineInterface');
+    }
+    
+    // Add global function to check AI enhancement status
+    window.getAIEnhancementStatus = () => {
+        return {
+            global: globalAIEnhancementStatus,
+            lastProcessing: lastProcessingWasAIEnhanced,
+            panelTitle: document.querySelector('.enhanced-panel .panel-title')?.textContent,
+            enhancedInfo: document.getElementById('enhanced-info')?.textContent
+        };
+    };
+    
+    // Add function to force AI enhancement status
+    window.forceAIEnhancementStatus = (aiEnhanced) => {
+        console.log(`🎭 Forcing AI enhancement status to: ${aiEnhanced}`);
+        globalAIEnhancementStatus = aiEnhanced;
+        lastProcessingWasAIEnhanced = aiEnhanced;
+        
+        const panelTitle = document.querySelector('.enhanced-panel .panel-title');
+        if (panelTitle) {
+            panelTitle.textContent = aiEnhanced ? 'AI Enhanced Result' : 'Upscaled Result';
+        }
+        
+        const enhancedInfo = document.getElementById('enhanced-info');
+        if (enhancedInfo) {
+            const currentText = enhancedInfo.textContent;
+            if (aiEnhanced && !currentText.includes('AI Enhanced')) {
+                enhancedInfo.textContent = currentText + ' • AI Enhanced';
+            } else if (!aiEnhanced && currentText.includes('AI Enhanced')) {
+                enhancedInfo.textContent = currentText.replace(' • AI Enhanced', '');
+            }
+        }
+    };
+};
+
+// Apply the fix when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fixAIEnhancementStatus);
+} else {
+    setTimeout(fixAIEnhancementStatus, 100);
+}
+
+// Export for global access
+window.aiEnhancementStatusFix = {
+    fixAIEnhancementStatus,
+    getStatus: () => ({ global: globalAIEnhancementStatus, lastProcessing: lastProcessingWasAIEnhanced })
+};
+
+console.log('✅ AI Enhancement Status Fix loaded and ready');

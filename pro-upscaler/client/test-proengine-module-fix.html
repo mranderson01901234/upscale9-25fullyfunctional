@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ProEngine Module Test</title>
+</head>
+<body>
+    <h1>ProEngine Module Import Test</h1>
+    <div id="results"></div>
+    
+    <script type="module">
+        const results = document.getElementById('results');
+        
+        try {
+            // Test importing ProEngineInterface
+            const { ProEngineInterface } = await import('./js/pro-engine-interface.js');
+            results.innerHTML += '<p>✅ ProEngineInterface import successful</p>';
+            
+            // Test instantiation
+            const proEngine = new ProEngineInterface();
+            results.innerHTML += '<p>✅ ProEngineInterface instantiation successful</p>';
+            
+            // Test availability check
+            const isAvailable = await proEngine.checkAvailability();
+            results.innerHTML += `<p>✅ ProEngine availability check: ${isAvailable}</p>`;
+            
+            results.innerHTML += '<p style="color: green; font-weight: bold;">🎉 ALL TESTS PASSED - ProEngineInterface is working!</p>';
+            
+        } catch (error) {
+            results.innerHTML += `<p style="color: red; font-weight: bold;">❌ ERROR: ${error.message}</p>`;
+            console.error('ProEngine test failed:', error);
+        }
+    </script>
+</body>
+</html>
