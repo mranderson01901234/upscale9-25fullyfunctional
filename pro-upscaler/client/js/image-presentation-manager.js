@@ -1619,8 +1619,8 @@ export class ImagePresentationManager {
     // Create a result object compatible with displayEnhancedResult
     // CORS FIX: Avoid canvas.toDataURL() for cross-origin images to prevent security errors
     const result = {
-      width: aiEnhanced ? finalUpscaledDimensions.width : enhancedDimensions.width,
-      height: aiEnhanced ? finalUpscaledDimensions.height : enhancedDimensions.height,
+      width: aiEnhanced ? finalUpscaledDimensions.width : (originalDimensions.width * userScaleFactor),
+      height: aiEnhanced ? finalUpscaledDimensions.height : (originalDimensions.height * userScaleFactor),
       dataUrl: enhancedImage.src, // Use image source directly for cross-origin compatibility
       imageElement: enhancedImage, // Store the image element for display
       isAIEnhanced: aiEnhanced,
