@@ -971,6 +971,7 @@ export class ImagePresentationManager {
   /**
    * Create display-optimized preview for UI
    * Keeps full resolution data separate for download
+   * FIXED: Calculate display dimensions based on container constraints, not source image dimensions
    */
     async createDisplayPreview(result) {
     return new Promise((resolve, reject) => {
@@ -983,59 +984,60 @@ export class ImagePresentationManager {
         
         img.onload = () => {
         // Get original image dimensions for comparison
-        const originalWidth = this.originalImage ? this.originalImage.width : img.width;
-        const originalHeight = this.originalImage ? this.originalImage.height : img.height;
+        const originalWidth = this.originalImage ? this.originalImage.width : (result.originalWidth || img.width);
+        const originalHeight = this.originalImage ? this.originalImage.height : (result.originalHeight || img.height);
         
         // Calculate container dimensions (enhanced panel gets 1.5fr in the grid)
         const containerWidth = Math.floor(window.innerWidth * 0.4); // Approximate 1.5fr of available space
         const containerHeight = Math.floor(window.innerHeight * 0.6); // Available height minus headers/footers
         
-        // Calculate optimal display size that:
-        // 1. Uses available space efficiently
-        // 2. Shows enhanced result larger than original when possible
-        // 3. Maintains aspect ratio
-        // 4. Doesn't exceed reasonable limits for performance
+        // FIXED: Calculate display dimensions based on container constraints and aspect ratio
+        // This ensures consistent display sizing regardless of source (Pure Upscaling vs AI Enhanced)
         
+        const aspectRatio = originalHeight / originalWidth;
         const maxDisplaySize = Math.min(
           Math.max(1200, containerWidth * 0.9), // At least 1200px or 90% of container width
           2400 // Cap at 2400px for performance
         );
         
-        // Calculate minimum display size (should be at least as large as original, preferably larger)
-        const minDisplayWidth = Math.max(originalWidth * 1.2, 400); // At least 20% larger than original
+        // Calculate optimal display size based on container and original image proportions
+        let displayWidth, displayHeight;
+        
+        if (aspectRatio > 1) {
+          // Portrait orientation: limit by height
+          displayHeight = Math.min(maxDisplaySize, containerHeight * 0.8);
+          displayWidth = Math.round(displayHeight / aspectRatio);
+        } else {
+          // Landscape orientation: limit by width
+          displayWidth = Math.min(maxDisplaySize, containerWidth * 0.9);
+          displayHeight = Math.round(displayWidth * aspectRatio);
+        }
+        
+        // Ensure minimum display size (should be at least as large as original, preferably larger)
+        const minDisplayWidth = Math.max(originalWidth * 1.2, 400);
         const minDisplayHeight = Math.max(originalHeight * 1.2, 300);
         
-        let displayWidth = img.width;
-        let displayHeight = img.height;
-        
-        // If image is smaller than our minimum, scale up
         if (displayWidth < minDisplayWidth || displayHeight < minDisplayHeight) {
           const upscaleRatio = Math.max(minDisplayWidth / displayWidth, minDisplayHeight / displayHeight);
           displayWidth = Math.round(displayWidth * upscaleRatio);
           displayHeight = Math.round(displayHeight * upscaleRatio);
         }
         
-        // If image is larger than our max, scale down
+        // Final constraint check: don't exceed max size
         if (displayWidth > maxDisplaySize || displayHeight > maxDisplaySize) {
           const downscaleRatio = Math.min(maxDisplaySize / displayWidth, maxDisplaySize / displayHeight);
           displayWidth = Math.round(displayWidth * downscaleRatio);
           displayHeight = Math.round(displayHeight * downscaleRatio);
         }
         
-        // Ensure we're not making the enhanced result smaller than the original
-        if (displayWidth < originalWidth && displayHeight < originalHeight) {
-          const maintainSizeRatio = Math.max(originalWidth / displayWidth, originalHeight / displayHeight);
-          displayWidth = Math.round(displayWidth * maintainSizeRatio);
-          displayHeight = Math.round(displayHeight * maintainSizeRatio);
-        }
-        
         // Log the sizing decision for debugging
-        console.log(`🖼️ Display Preview Sizing:
+        console.log(`🖼️ Display Preview Sizing (FIXED):
           Original: ${originalWidth}×${originalHeight}
           Full Result: ${img.width}×${img.height}
           Display: ${displayWidth}×${displayHeight}
           Container: ${containerWidth}×${containerHeight}
-          Scale Factor: ${(displayWidth / originalWidth).toFixed(2)}x`);
+          Aspect Ratio: ${aspectRatio.toFixed(3)}
+          Display Scale Factor: ${(displayWidth / originalWidth).toFixed(2)}x`);
         
         // CORS FIX: Instead of using canvas.toDataURL() which fails on tainted canvas,
         // return the image src directly for display. This avoids the security restriction.
@@ -1619,8 +1621,8 @@ export class ImagePresentationManager {
     // Create a result object compatible with displayEnhancedResult
     // CORS FIX: Avoid canvas.toDataURL() for cross-origin images to prevent security errors
     const result = {
-      width: aiEnhanced ? finalUpscaledDimensions.width : (originalDimensions.width * userScaleFactor),
-      height: aiEnhanced ? finalUpscaledDimensions.height : (originalDimensions.height * userScaleFactor),
+      width: finalUpscaledDimensions.width,
+      height: finalUpscaledDimensions.height,
       dataUrl: enhancedImage.src, // Use image source directly for cross-origin compatibility
       imageElement: enhancedImage, // Store the image element for display
       isAIEnhanced: aiEnhanced,
