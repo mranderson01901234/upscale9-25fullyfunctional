@@ -261,11 +261,11 @@ class EnterpriseProUpscalerApp {
     initializeUserMenu() {
         // Use setTimeout to ensure DOM is ready
         setTimeout(() => {
-            const userMenuButton = document.getElementById('user-menu-button');
-            const userDropdown = document.getElementById('user-dropdown');
+            const userMenuButton = document.getElementById('profile-trigger');
+            const userDropdown = document.getElementById('user-dropdown-menu');
 
             if (userMenuButton && userDropdown) {
-                console.log('✅ Gear icon elements found, setting up event listeners');
+                console.log('✅ User menu elements found, setting up event listeners');
                 
                 // Remove any existing listeners by cloning the button
                 const newMenuButton = userMenuButton.cloneNode(true);
@@ -275,7 +275,7 @@ class EnterpriseProUpscalerApp {
                 newMenuButton.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('🔘 Gear icon clicked!');
+                    console.log('🔘 User menu clicked!');
                     userDropdown.classList.toggle('hidden');
                 });
 
@@ -294,9 +294,9 @@ class EnterpriseProUpscalerApp {
                 // Add handlers for dropdown menu items
                 this.initializeDropdownHandlers();
                 
-                console.log('✅ Gear icon dropdown functionality initialized');
+                console.log('✅ User menu dropdown functionality initialized');
             } else {
-                console.log('❌ Gear icon elements not found, retrying in 1 second...');
+                console.log('❌ User menu elements not found, retrying in 1 second...');
                 // Retry after 1 second if elements not found
                 setTimeout(() => this.initializeUserMenu(), 1000);
             }

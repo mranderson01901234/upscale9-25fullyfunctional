@@ -53,4 +53,4 @@ sleep 2
 echo "✅ All services stopped!"
 echo ""
 echo "🚀 To start fresh environment:"
-echo "   ./start-fresh.sh" 
+echo "   ./start-master-fresh.sh" 

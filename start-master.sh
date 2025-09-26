@@ -102,7 +102,7 @@ if ! check_port 3007; then
 fi
 
 print_info "Starting Pro Engine Desktop Service on port 3007..."
-cd /home/mranderson/desktophybrid/pro-engine-desktop/service
+cd /home/mranderson/Desktop/upscalerapplication/upscale9-25fullyfunctional/pro-engine-desktop/service
 
 # Check if dependencies are installed
 if [ ! -d "node_modules" ]; then
@@ -134,7 +134,7 @@ if ! check_port 3002; then
 fi
 
 print_info "Starting Pro Upscaler Server on port 3002..."
-cd /home/mranderson/desktophybrid/pro-upscaler/server
+cd /home/mranderson/Desktop/upscalerapplication/upscale9-25fullyfunctional/pro-upscaler/server
 
 # Check if dependencies are installed
 if [ ! -d "node_modules" ]; then
@@ -166,7 +166,7 @@ if ! check_port 8080; then
 fi
 
 print_info "Starting Pro Upscaler Client on port 8080..."
-cd /home/mranderson/desktophybrid/pro-upscaler/client
+cd /home/mranderson/Desktop/upscalerapplication/upscale9-25fullyfunctional/pro-upscaler/client
 
 # Verify required files exist
 required_files=("index.html" "style.css" "js/main.js")

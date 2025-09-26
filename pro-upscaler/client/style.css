@@ -2249,7 +2249,6 @@ button:disabled {
     height: auto;
     object-fit: contain;
     border-radius: 4px;
-    box-shadow: 0 2px 8px hsl(var(--foreground) / 0.1);
     transition: all 0.3s ease; /* Smooth transitions when size changes */
 }
 

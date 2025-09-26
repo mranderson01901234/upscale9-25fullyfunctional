@@ -1,7 +1,7 @@
 class FileHandler {
     constructor() {
         this.supportedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/tiff', 'image/tif'];
-        this.maxFileSize = 1.5 * 1024 * 1024 * 1024; // 1.5GB
+        this.maxFileSize = 3.0 * 1024 * 1024 * 1024; // 3.0GB for extreme upscales with WebP
     }
     
     validateFile(file) {
@@ -293,13 +293,46 @@ class FileHandler {
     }
     
     downloadFile(result, filename = null) {
-        const link = document.createElement('a');
-        link.href = result.dataUrl;
-        link.download = filename || `upscaled-${Date.now()}.${result.format}`;
-        link.style.display = 'none';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        try {
+            // Convert data URL to blob to prevent browser navigation
+            const dataUrl = result.dataUrl;
+            const byteString = atob(dataUrl.split(',')[1]);
+            const mimeString = dataUrl.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            
+            const blob = new Blob([ab], { type: mimeString });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename || `upscaled-${Date.now()}.${result.format}`;
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up the object URL
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+            }, 100);
+            
+        } catch (error) {
+            console.error('Blob download failed, falling back to data URL:', error);
+            // Fallback to original method
+            const link = document.createElement('a');
+            link.href = result.dataUrl;
+            link.download = filename || `upscaled-${Date.now()}.${result.format}`;
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     }
 }

@@ -5,7 +5,7 @@
 
 export class PerformanceOptimizedUpscaler {
   constructor() {
-    this.maxSafeCanvasPixels = 50000000; // 50MP safe threshold
+    this.maxSafeCanvasPixels = 4000000000; // 4,000MP threshold for extreme upscaling (25x)
     this.previewSize = 1024; // Preview resolution
   }
 
@@ -60,34 +60,38 @@ export class PerformanceOptimizedUpscaler {
   /**
    * Create virtual canvas result (for large images) - PREVENTS 16+ SECOND DELAY
    */
-  createVirtualCanvasResult(result, originalImageData, upscalingTime) {
-    const { width, height, imageData } = result;
+  createVirtualCanvasResult(imageData, scaleFactor, progressCallback) {
+    const targetWidth = imageData.width * scaleFactor;
+    const targetHeight = imageData.height * scaleFactor;
     
     // Create virtual canvas (NO ACTUAL PIXEL DATA)
     const virtualCanvas = document.createElement('canvas');
-    virtualCanvas.width = width;
-    virtualCanvas.height = height;
+    virtualCanvas.width = targetWidth;
+    virtualCanvas.height = targetHeight;
     
     // Store result data without creating massive canvas
     virtualCanvas.virtualResult = {
       imageData: imageData,
+      scaleFactor: scaleFactor,
       isVirtual: true,
-      originalImageData: originalImageData,
-      upscalingTime: upscalingTime
+      originalImageData: imageData,
+      targetWidth: targetWidth,
+      targetHeight: targetHeight
     };
     
     // Create smart preview for display (THIS IS FAST)
-    const previewCanvas = this.createSmartPreview(originalImageData, width, height);
+    const previewCanvas = this.createSmartPreview(imageData, targetWidth, targetHeight);
     
-    console.log(`💾 Created virtual canvas: ${width}×${height} with ${this.previewSize}px preview`);
+    console.log(`💾 Created virtual canvas: ${targetWidth}×${targetHeight} with ${this.previewSize}px preview`);
     
     return {
       displayCanvas: previewCanvas,      // For immediate display
       fullResolutionCanvas: virtualCanvas, // For downloads
       isVirtual: true,
-      dimensions: { width, height },
-      processingTime: upscalingTime,
-      megapixels: (width * height / 1000000).toFixed(1)
+      width: targetWidth,
+      height: targetHeight,
+      dimensions: { width: targetWidth, height: targetHeight },
+      megapixels: (targetWidth * targetHeight / 1000000).toFixed(1)
     };
   }
 
@@ -173,29 +177,12 @@ export class PerformanceOptimizedUpscaler {
     
     console.log(`⚡ Progressive upscaling: ${imageData.width}×${imageData.height} → ${targetWidth}×${targetHeight} (${scaleFactor}x)`);
     
-    // CHECK: If target is too large, don't attempt full upscaling
+    // CHECK: If target is too large, use virtual canvas system for true upscaling
     if (totalPixels > this.maxSafeCanvasPixels) {
-      console.log(`⚠️ Target size ${targetWidth}×${targetHeight} (${(totalPixels/1000000).toFixed(1)}MP) exceeds safe limit - using virtual result`);
+      console.log(`⚠️ Target size ${targetWidth}×${targetHeight} (${(totalPixels/1000000).toFixed(1)}MP) exceeds safe limit - using virtual canvas system`);
       
-      // Create a smaller intermediate result and return virtual data
-      const maxSafeDimension = Math.floor(Math.sqrt(this.maxSafeCanvasPixels));
-      const intermediateScale = Math.min(scaleFactor, maxSafeDimension / Math.max(imageData.width, imageData.height));
-      const intermediateWidth = Math.floor(imageData.width * intermediateScale);
-      const intermediateHeight = Math.floor(imageData.height * intermediateScale);
-      
-      console.log(`🔄 Creating intermediate result: ${intermediateWidth}×${intermediateHeight} (safe size)`);
-      
-      // Create intermediate result
-      const intermediateResult = await this.performSafeUpscaling(imageData, intermediateScale, progressCallback);
-      
-      // Return virtual result with target dimensions for compatibility
-      return {
-        width: intermediateWidth,
-        height: intermediateHeight,
-        imageData: intermediateResult.imageData,
-        canvas: intermediateResult.canvas,
-        isVirtual: false // This is a real upscaled result, just browser-limited
-      };
+      // Use virtual canvas system for true high-resolution upscaling
+      return this.createVirtualCanvasResult(imageData, scaleFactor, progressCallback);
     }
     
     // Safe size - proceed with normal upscaling

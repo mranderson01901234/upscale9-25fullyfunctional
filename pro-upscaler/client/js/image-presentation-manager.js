@@ -28,6 +28,13 @@ export class ImagePresentationManager {
       }
     };
     
+    // Timer properties
+    this.timer = {
+      startTime: null,
+      intervalId: null,
+      isRunning: false
+    };
+    
     // Get references to existing services
     this.authService = window.authService;
     this.proEngineInterface = null; // Will be set by main app
@@ -99,6 +106,18 @@ export class ImagePresentationManager {
     const processButton = document.getElementById('start-processing');
     if (processButton) {
       processButton.addEventListener('click', this.handleProcessing.bind(this));
+    }
+
+    // Scale factor and format change listeners for immediate warnings
+    const scaleFactorSelect = document.getElementById('scale-factor');
+    const outputFormatSelect = document.getElementById('output-format');
+    
+    if (scaleFactorSelect) {
+      scaleFactorSelect.addEventListener('change', this.handleSettingsChange.bind(this));
+    }
+    
+    if (outputFormatSelect) {
+      outputFormatSelect.addEventListener('change', this.handleSettingsChange.bind(this));
     }
 
     // Browse location button
@@ -220,6 +239,10 @@ export class ImagePresentationManager {
           this.updateOriginalImageDisplay(img, file);
           this.updateOriginalInfo();
           this.updateCurrentImageInfo();
+          
+          // Reset enhanced canvas to show placeholder
+          this.resetEnhancedCanvas();
+          
           resolve();
         };
         img.onerror = reject;
@@ -311,13 +334,57 @@ export class ImagePresentationManager {
       this.updateProcessingState('processing', 'analysis');
       this.updateProcessingButton(false);
       
+      // Start the timer
+      this.startTimer();
+      
       // Start processing pipeline
       await this.processImage(settings);
       
     } catch (error) {
       console.error('Processing error:', error);
       this.updateProcessingState('error');
+      this.stopTimer();
       this.showNotification('Processing failed: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Handle settings change for immediate warnings
+   */
+  handleSettingsChange() {
+    if (!this.originalImage) return;
+    
+    const scaleFactor = document.getElementById('scale-factor')?.value || '4x';
+    const outputFormat = document.getElementById('output-format')?.value || 'jpeg';
+    const scaleValue = parseInt(scaleFactor);
+    
+    // Show immediate warning for extreme upscales
+    if (scaleValue >= 15) {
+      const estimatedPixels = this.originalImage.width * this.originalImage.height * scaleValue * scaleValue;
+      const estimatedMP = (estimatedPixels / 1000000).toFixed(1);
+      
+      // Calculate estimated file size for the selected format
+      const uncompressedSize = estimatedPixels * 3;
+      let estimatedSize, formatName;
+      
+      if (outputFormat === 'webp') {
+        estimatedSize = (uncompressedSize / 12 / (1024**3)).toFixed(2);
+        formatName = 'WebP';
+      } else if (outputFormat === 'png') {
+        estimatedSize = (uncompressedSize / 2 / (1024**3)).toFixed(2);
+        formatName = 'PNG';
+      } else if (outputFormat === 'jpeg') {
+        estimatedSize = (uncompressedSize / 8 / (1024**3)).toFixed(2);
+        formatName = 'JPEG';
+      } else {
+        estimatedSize = (uncompressedSize / 8 / (1024**3)).toFixed(2);
+        formatName = outputFormat.toUpperCase();
+      }
+      
+      this.showNotification(
+        `Extreme upscale: ${scaleFactor} will create ${estimatedMP}MP image (~${estimatedSize}GB ${formatName}). Requires Pro Engine Desktop Service. Download required for full resolution.`,
+        'info'
+      );
     }
   }
 
@@ -325,16 +392,103 @@ export class ImagePresentationManager {
    * Get current processing settings
    */
   getProcessingSettings() {
-    const scaleFactor = document.getElementById('scale-factor')?.value || '2x';
+    const scaleFactor = document.getElementById('scale-factor')?.value || '4x';
     const outputFormat = document.getElementById('output-format')?.value || 'jpeg';
     const aiEnhancement = document.getElementById('ai-enhancement-toggle')?.checked || true;
     const enhancementType = document.getElementById('enhancement-type')?.value || 'super-resolution';
     const faceEnhancement = document.getElementById('face-enhancement-toggle')?.checked || false;
     const artifactRemoval = document.getElementById('artifact-removal-toggle')?.checked || false;
 
+    const scaleValue = parseInt(scaleFactor);
+    
+    // Auto-adjust format for extreme upscales based on estimated file size
+    let finalOutputFormat = outputFormat;
+    if (scaleValue >= 15) {
+      const originalImage = this.originalImage;
+      if (originalImage) {
+        const estimatedPixels = originalImage.width * originalImage.height * scaleValue * scaleValue;
+        const estimatedMP = estimatedPixels / 1000000;
+        
+        // Calculate estimated file sizes for different formats
+        const uncompressedSize = estimatedPixels * 3; // 8-bit RGB
+        const jpegSize = uncompressedSize / 8; // 8:1 compression for detailed images
+        const webpSize = uncompressedSize / 12; // 12:1 compression for WebP
+        const pngSize = uncompressedSize / 2; // 2:1 compression for PNG
+        
+        console.log(`📊 Format analysis for ${scaleFactor} upscale (${estimatedMP.toFixed(1)}MP):`);
+        console.log(`   JPEG: ${(jpegSize / (1024**3)).toFixed(2)} GB`);
+        console.log(`   WebP: ${(webpSize / (1024**3)).toFixed(2)} GB`);
+        console.log(`   PNG:  ${(pngSize / (1024**3)).toFixed(2)} GB`);
+        
+        // Auto-select best format based on file size and format limitations
+        if (jpegSize > 1.5 * 1024**3) { // > 1.5GB
+          if (webpSize <= 1.0 * 1024**3) { // WebP has stricter size limits
+            console.log(`🔄 Auto-switching to WebP for ${scaleFactor} upscale (JPEG would be ${(jpegSize / (1024**3)).toFixed(2)} GB)`);
+            document.getElementById('output-format').value = 'webp';
+            finalOutputFormat = 'webp';
+          } else if (pngSize <= 2.0 * 1024**3) {
+            console.log(`🔄 Auto-switching to PNG for ${scaleFactor} upscale (WebP would be ${(webpSize / (1024**3)).toFixed(2)} GB, too large for WebP)`);
+            document.getElementById('output-format').value = 'png';
+            finalOutputFormat = 'png';
+          } else {
+            console.log(`⚠️ All formats would be very large for ${scaleFactor} upscale - using TIFF for maximum compatibility`);
+            document.getElementById('output-format').value = 'tiff';
+            finalOutputFormat = 'tiff';
+          }
+        } else if (outputFormat === 'png' && pngSize > 1.5 * 1024**3) {
+          if (webpSize <= 1.0 * 1024**3) {
+            console.log(`🔄 Auto-switching to WebP for ${scaleFactor} upscale (PNG would be ${(pngSize / (1024**3)).toFixed(2)} GB)`);
+            document.getElementById('output-format').value = 'webp';
+            finalOutputFormat = 'webp';
+          } else {
+            console.log(`🔄 Auto-switching to TIFF for ${scaleFactor} upscale (PNG would be ${(pngSize / (1024**3)).toFixed(2)} GB, WebP too large)`);
+            document.getElementById('output-format').value = 'tiff';
+            finalOutputFormat = 'tiff';
+          }
+        } else if (outputFormat === 'webp' && webpSize > 1.0 * 1024**3) {
+          console.log(`🔄 Auto-switching to PNG for ${scaleFactor} upscale (WebP would be ${(webpSize / (1024**3)).toFixed(2)} GB, too large for WebP)`);
+          document.getElementById('output-format').value = 'png';
+          finalOutputFormat = 'png';
+        }
+      }
+    }
+    
+    // Show warning for extreme upscales with format info
+    if (scaleValue >= 15) {
+      const originalImage = this.originalImage;
+      if (originalImage) {
+        const estimatedPixels = originalImage.width * originalImage.height * scaleValue * scaleValue;
+        const estimatedMP = (estimatedPixels / 1000000).toFixed(1);
+        
+        // Calculate estimated file size for the selected format
+        const uncompressedSize = estimatedPixels * 3;
+        let estimatedSize, formatName;
+        
+        if (finalOutputFormat === 'webp') {
+          estimatedSize = (uncompressedSize / 12 / (1024**3)).toFixed(2);
+          formatName = 'WebP';
+        } else if (finalOutputFormat === 'png') {
+          estimatedSize = (uncompressedSize / 2 / (1024**3)).toFixed(2);
+          formatName = 'PNG';
+        } else if (finalOutputFormat === 'jpeg') {
+          estimatedSize = (uncompressedSize / 8 / (1024**3)).toFixed(2);
+          formatName = 'JPEG';
+        } else {
+          estimatedSize = (uncompressedSize / 8 / (1024**3)).toFixed(2);
+          formatName = finalOutputFormat.toUpperCase();
+        }
+        
+        console.log(`⚠️ Extreme upscale warning: ${scaleFactor} will create ${estimatedMP}MP image (~${estimatedSize}GB ${formatName})`);
+        this.showNotification(
+          `Extreme upscale: ${scaleFactor} will create ${estimatedMP}MP image (~${estimatedSize}GB ${formatName}). Requires Pro Engine Desktop Service. Download required for full resolution.`,
+          'info'
+        );
+      }
+    }
+
     return {
-      scaleFactor: parseInt(scaleFactor),
-      outputFormat,
+      scaleFactor: scaleValue,
+      outputFormat: finalOutputFormat,
       aiEnhancement,
       enhancementType,
       faceEnhancement,
@@ -543,6 +697,7 @@ export class ImagePresentationManager {
       
     } catch (error) {
       this.updateProcessingState('error');
+      this.stopTimer();
       // Hide progress section on error
       this.hideEnhancementProgress();
       throw error;
@@ -579,9 +734,9 @@ export class ImagePresentationManager {
         dataUrl: imageDataUrl,
         scaleFactor: settings.scaleFactor,
         format: settings.outputFormat,
-        quality: settings.quality,
-        width: this.originalImage.naturalWidth,
-        height: this.originalImage.naturalHeight
+        quality: settings.quality || 95,
+        width: this.originalImage.width,
+        height: this.originalImage.height
       };
       
       // Use Pro Engine Desktop Service for non-AI upscaling
@@ -599,7 +754,14 @@ export class ImagePresentationManager {
     } catch (error) {
       console.error('❌ Pro Engine Desktop Service processing failed:', error);
       
-      // Fallback to browser-based upscaling if desktop service fails
+      // For extreme upscales (15x+), try browser fallback if desktop service fails
+      if (settings.scaleFactor >= 15) {
+        console.warn('⚠️ Desktop service failed for extreme upscale, trying browser fallback...');
+        console.log('🔄 Falling back to browser-based upscaling for extreme upscale...');
+        return await this.processWithUpscaler(settings);
+      }
+      
+      // Fallback to browser-based upscaling for smaller upscales
       console.log('🔄 Falling back to browser-based upscaling...');
       return await this.processWithUpscaler(settings);
     }
@@ -760,29 +922,36 @@ export class ImagePresentationManager {
   }
 
   /**
-   * Display original image in both canvases for non-AI upscaling
+   * Reset enhanced result canvas to show placeholder
    */
-  displayOriginalInBothCanvases() {
-    if (!this.originalImage) return;
-    
-    // Show original image in enhanced result canvas
+  resetEnhancedCanvas() {
     const enhancedPlaceholder = document.getElementById('enhanced-placeholder');
     const enhancedPreview = document.getElementById('enhanced-preview');
     const enhancedImage = document.getElementById('enhanced-image');
+    const enhancedInfo = document.getElementById('enhanced-info');
     
-    if (enhancedPlaceholder) enhancedPlaceholder.classList.add('hidden');
-    if (enhancedPreview) {
-      enhancedPreview.classList.remove('hidden');
-      if (enhancedImage) {
-        enhancedImage.src = this.originalImage.dataUrl;
-      }
+    // Show placeholder, hide preview
+    if (enhancedPlaceholder) enhancedPlaceholder.classList.remove('hidden');
+    if (enhancedPreview) enhancedPreview.classList.add('hidden');
+    
+    // Clear any existing image
+    if (enhancedImage) {
+      enhancedImage.src = '';
+    }
+    
+    // Reset info display
+    if (enhancedInfo) {
+      enhancedInfo.textContent = '-';
     }
     
     // Update panel title
     const panelTitle = document.querySelector('.enhanced-panel .panel-title');
     if (panelTitle) {
-      panelTitle.textContent = 'Upscaled Result';
+      panelTitle.textContent = 'Enhanced Result';
     }
+    
+    // Clear enhanced image data
+    this.enhancedImage = null;
   }
   
 
@@ -902,9 +1071,9 @@ export class ImagePresentationManager {
   }
 
   /**
-   * Display enhanced result
+   * Display enhanced result - SIMPLIFIED: Show original image immediately
    */
-    displayEnhancedResult(result, aiEnhanced = false) {
+  displayEnhancedResult(result, aiEnhanced = false) {
     // Track AI enhancement status for future reference
     this.lastProcessingWasAIEnhanced = aiEnhanced;
     
@@ -917,171 +1086,40 @@ export class ImagePresentationManager {
     // Store the full-resolution result for download
     this.enhancedImage = result;
     
-    // Create display-optimized preview
-    this.createDisplayPreview(result).then(displayPreview => {
-      const enhancedPlaceholder = document.getElementById('enhanced-placeholder');
-      const enhancedPreview = document.getElementById('enhanced-preview');
-      const enhancedImage = document.getElementById('enhanced-image');
-      const enhancedInfo = document.getElementById('enhanced-info');
-
-      if (enhancedPlaceholder) enhancedPlaceholder.classList.add('hidden');
-      if (enhancedPreview) {
-        enhancedPreview.classList.remove('hidden');
-        if (enhancedImage) {
-          // Use display preview for UI, keep full resolution for download
-          enhancedImage.src = displayPreview.dataUrl;
-          
-          // CORS FIX: Set proper dimensions for cross-origin images
-          if (displayPreview.isCrossOrigin) {
-            enhancedImage.style.width = displayPreview.width + 'px';
-            enhancedImage.style.height = displayPreview.height + 'px';
-            enhancedImage.style.objectFit = 'contain';
-            console.log(`🔧 Applied cross-origin image sizing: ${displayPreview.width}×${displayPreview.height}`);
-          }
-        }
-      }
-
-      if (enhancedInfo) {
-        const megapixels = ((result.width * result.height) / 1000000).toFixed(1);
-        const displayMegapixels = ((displayPreview.width * displayPreview.height) / 1000000).toFixed(1);
-        const originalImage = this.originalImage || (window.app && window.app.currentImage);
-        const originalMegapixels = originalImage ? ((originalImage.width * originalImage.height) / 1000000).toFixed(1) : '?';
-        
-        // Calculate scale factors for better user understanding
-        const fullScaleFactor = originalImage ? (result.width / originalImage.width).toFixed(1) : '?';
-        const displayScaleFactor = originalImage ? (displayPreview.width / originalImage.width).toFixed(1) : '?';
-        
-        enhancedInfo.textContent = `Full: ${result.width}×${result.height} (${megapixels}MP, ${fullScaleFactor}×) • Display: ${displayPreview.width}×${displayPreview.height} (${displayMegapixels}MP, ${displayScaleFactor}×)`;
-      }
-
-      this.enableShareButtons();
-      
-      // Auto-complete progress bar once enhanced result is displayed
-      this.updateEnhancementProgress(100, 'Complete!', 'Processing finished successfully');
-    }).catch(error => {
-      console.error('Error creating display preview:', error);
-      // Fallback to original result
-      this.displayFallbackResult(result);
-      
-      // Still complete progress even on fallback
-      this.updateEnhancementProgress(100, 'Complete!', 'Processing finished');
-    });
-  }
-
-  /**
-   * Create display-optimized preview for UI
-   * Keeps full resolution data separate for download
-   * FIXED: Calculate display dimensions based on container constraints, not source image dimensions
-   */
-    async createDisplayPreview(result) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        
-        img.onerror = (error) => {
-          console.error('❌ Image load error in createDisplayPreview:', error);
-          reject(new Error('Failed to load image for preview'));
-        };
-        
-        img.onload = () => {
-        // Get original image dimensions for comparison
-        const originalWidth = this.originalImage ? this.originalImage.width : (result.originalWidth || img.width);
-        const originalHeight = this.originalImage ? this.originalImage.height : (result.originalHeight || img.height);
-        
-        // Calculate container dimensions (enhanced panel gets 1.5fr in the grid)
-        const containerWidth = Math.floor(window.innerWidth * 0.4); // Approximate 1.5fr of available space
-        const containerHeight = Math.floor(window.innerHeight * 0.6); // Available height minus headers/footers
-        
-        // FIXED: Calculate display dimensions based on container constraints and aspect ratio
-        // This ensures consistent display sizing regardless of source (Pure Upscaling vs AI Enhanced)
-        
-        const aspectRatio = originalHeight / originalWidth;
-        const maxDisplaySize = Math.min(
-          Math.max(1200, containerWidth * 0.9), // At least 1200px or 90% of container width
-          2400 // Cap at 2400px for performance
-        );
-        
-        // Calculate optimal display size based on container and original image proportions
-        let displayWidth, displayHeight;
-        
-        if (aspectRatio > 1) {
-          // Portrait orientation: limit by height
-          displayHeight = Math.min(maxDisplaySize, containerHeight * 0.8);
-          displayWidth = Math.round(displayHeight / aspectRatio);
-        } else {
-          // Landscape orientation: limit by width
-          displayWidth = Math.min(maxDisplaySize, containerWidth * 0.9);
-          displayHeight = Math.round(displayWidth * aspectRatio);
-        }
-        
-        // Ensure minimum display size (should be at least as large as original, preferably larger)
-        const minDisplayWidth = Math.max(originalWidth * 1.2, 400);
-        const minDisplayHeight = Math.max(originalHeight * 1.2, 300);
-        
-        if (displayWidth < minDisplayWidth || displayHeight < minDisplayHeight) {
-          const upscaleRatio = Math.max(minDisplayWidth / displayWidth, minDisplayHeight / displayHeight);
-          displayWidth = Math.round(displayWidth * upscaleRatio);
-          displayHeight = Math.round(displayHeight * upscaleRatio);
-        }
-        
-        // Final constraint check: don't exceed max size
-        if (displayWidth > maxDisplaySize || displayHeight > maxDisplaySize) {
-          const downscaleRatio = Math.min(maxDisplaySize / displayWidth, maxDisplaySize / displayHeight);
-          displayWidth = Math.round(displayWidth * downscaleRatio);
-          displayHeight = Math.round(displayHeight * downscaleRatio);
-        }
-        
-        // Log the sizing decision for debugging
-        console.log(`🖼️ Display Preview Sizing (FIXED):
-          Original: ${originalWidth}×${originalHeight}
-          Full Result: ${img.width}×${img.height}
-          Display: ${displayWidth}×${displayHeight}
-          Container: ${containerWidth}×${containerHeight}
-          Aspect Ratio: ${aspectRatio.toFixed(3)}
-          Display Scale Factor: ${(displayWidth / originalWidth).toFixed(2)}x`);
-        
-        // CORS FIX: Instead of using canvas.toDataURL() which fails on tainted canvas,
-        // return the image src directly for display. This avoids the security restriction.
-        resolve({
-          dataUrl: img.src, // Use original image source directly
-          imageElement: img, // Provide the loaded image element
-          width: displayWidth,
-          height: displayHeight,
-          actualWidth: img.width,
-          actualHeight: img.height,
-          isDisplayPreview: true,
-          isCrossOrigin: true // Flag to indicate this is from cross-origin
-        });
-      };
-      
-      img.onerror = () => reject(new Error('Failed to load image for preview'));
-      img.src = result.dataUrl;
-    });
-  }
-
-  /**
-   * Fallback display method if preview generation fails
-   */
-  displayFallbackResult(result) {
+    // Get DOM elements
     const enhancedPlaceholder = document.getElementById('enhanced-placeholder');
     const enhancedPreview = document.getElementById('enhanced-preview');
     const enhancedImage = document.getElementById('enhanced-image');
     const enhancedInfo = document.getElementById('enhanced-info');
 
+    // Hide placeholder, show preview
     if (enhancedPlaceholder) enhancedPlaceholder.classList.add('hidden');
-    if (enhancedPreview) {
-      enhancedPreview.classList.remove('hidden');
-      if (enhancedImage) {
-        enhancedImage.src = result.dataUrl;
-      }
+    if (enhancedPreview) enhancedPreview.classList.remove('hidden');
+    
+    // Show the original image immediately (same as left canvas)
+    if (enhancedImage && this.originalImage) {
+      enhancedImage.src = this.originalImage.dataUrl;
+      console.log('✅ Enhanced canvas showing original image immediately');
     }
 
+    // Update info with upscaled dimensions and extreme upscale warning
     if (enhancedInfo) {
       const megapixels = ((result.width * result.height) / 1000000).toFixed(1);
-      enhancedInfo.textContent = `${result.width}×${result.height} • ${megapixels}MP`;
+      const scaleFactorElement = document.getElementById('scale-factor');
+      const userSelectedScaleFactor = scaleFactorElement ? parseInt(scaleFactorElement.value) : '?';
+      
+      // Add warning for extreme upscales
+      let infoText = `${result.width}×${result.height} • ${megapixels}MP • ${userSelectedScaleFactor}×`;
+      if (userSelectedScaleFactor >= 15) {
+        infoText += ' • Download for full resolution';
+      }
+      
+      enhancedInfo.textContent = infoText;
     }
 
     this.enableShareButtons();
   }
+
 
   /**
    * Update processing state and UI
@@ -1173,15 +1211,18 @@ export class ImagePresentationManager {
     this.updateProcessingState('complete');
     this.updateProcessingButton(true, 'Process Another');
     
+    // Stop the timer
+    this.stopTimer();
+    
     // Complete the progress bar to 100%
     this.updateEnhancementProgress(100, 'Complete!', 'Processing finished successfully');
     
+    // Single completion notification
     let successMessage;
     if (aiEnhanced) {
-      successMessage = 'AI Enhancement completed successfully! Faces have been enhanced with CodeFormer.';
+      successMessage = 'AI Enhancement completed! Faces enhanced with CodeFormer technology.';
     } else {
-      // Non-AI upscaling result (handled by Pro Engine Desktop Service)
-      successMessage = `Upscaling completed successfully! Image enlarged to ${result.width}×${result.height} (${userSelectedScaleFactor}× scale factor)`;
+      successMessage = `Upscaling completed! Image enlarged to ${result.width}×${result.height} (${userSelectedScaleFactor}× scale factor)`;
     }
     this.showNotification(successMessage, 'success');
     
@@ -1236,6 +1277,65 @@ export class ImagePresentationManager {
       button.disabled = !enabled;
       const span = button.querySelector('span');
       if (span) span.textContent = text;
+    }
+  }
+
+  /**
+   * Start the processing timer
+   */
+  startTimer() {
+    this.timer.startTime = Date.now();
+    this.timer.isRunning = true;
+    
+    // Show the timer
+    const timerElement = document.getElementById('processing-timer');
+    if (timerElement) {
+      timerElement.style.display = 'flex';
+    }
+    
+    // Update timer every 100ms for smooth display
+    this.timer.intervalId = setInterval(() => {
+      this.updateTimerDisplay();
+    }, 100);
+  }
+
+  /**
+   * Stop the processing timer
+   */
+  stopTimer() {
+    this.timer.isRunning = false;
+    
+    if (this.timer.intervalId) {
+      clearInterval(this.timer.intervalId);
+      this.timer.intervalId = null;
+    }
+    
+    // Update final time display
+    this.updateTimerDisplay();
+    
+    // Hide the timer after a short delay
+    setTimeout(() => {
+      const timerElement = document.getElementById('processing-timer');
+      if (timerElement) {
+        timerElement.style.display = 'none';
+      }
+    }, 2000);
+  }
+
+  /**
+   * Update the timer display
+   */
+  updateTimerDisplay() {
+    const timerText = document.getElementById('timer-text');
+    if (!timerText || !this.timer.startTime) return;
+    
+    const elapsed = Date.now() - this.timer.startTime;
+    const seconds = (elapsed / 1000).toFixed(1);
+    
+    if (this.timer.isRunning) {
+      timerText.textContent = `Processing: ${seconds}s`;
+    } else {
+      timerText.textContent = `Complete: ${seconds}s`;
     }
   }
 
@@ -1647,53 +1747,97 @@ export class ImagePresentationManager {
     this.enableShareButtons();
     
     // Show success notification
-    const successMessage = aiEnhanced ? 
-      'AI Enhancement completed! Faces enhanced with CodeFormer technology.' : 
-      'High-quality upscaling completed successfully!';
-    this.showNotification(successMessage, 'success');
+    // Completion notification is handled in updateProcessingComplete
+    console.log(`✅ ${aiEnhanced ? 'AI-enhanced' : 'Upscaled'} result processing completed`);
     
-    // AUTO-SAVE: Automatically save the upscaled result to the selected download folder
-    try {
-      await this.autoSaveUpscaledResult(data, aiEnhanced);
-    } catch (error) {
-      console.error('❌ Auto-save failed:', error);
-      // Don't show error to user since this is a background operation
-    }
+    // AUTO-SAVE: Temporarily disabled to prevent separate window opening
+    // try {
+    //   await this.autoSaveUpscaledResult(data, aiEnhanced);
+    // } catch (error) {
+    //   console.error('❌ Auto-save failed:', error);
+    //   // Don't show error to user since this is a background operation
+    // }
     
     console.log(`✅ ${aiEnhanced ? 'AI-enhanced' : 'Upscaled'} result displayed in existing enterprise layout`);
   }
 
   /**
    * Auto-save the upscaled result to the selected download location
-   * MODIFIED: Now only shows notification without triggering any downloads to avoid browser navigation
+   * RESTORED: Now actually downloads the file to the selected location
    */
   async autoSaveUpscaledResult(data, aiEnhanced) {
-    console.log('🔄 Auto-save notification starting...', { aiEnhanced, hasData: !!data });
+    console.log('🔄 Auto-save starting...', { aiEnhanced, hasData: !!data });
     
-    const downloadLocation = this.getDownloadLocation();
-    const fileName = this.generateFileName('jpeg');
-    
-    // FIXED: Instead of auto-downloading, just show notification about where file will be saved
-    // This avoids all browser navigation issues while still informing the user
-    
-    if (this.enhancedImage?.isProEngineResult) {
-      // Pro Engine results are saved on the server
-      console.log('✅ Pro Engine result - file saved to server location');
+    try {
+      if (!this.enhancedImage) {
+        console.log('❌ No enhanced image available for auto-save');
+        return;
+      }
+
+      const downloadLocation = this.getDownloadLocation();
+      const fileName = this.generateFileName('jpeg');
+      
+      // Use FileHandler to download the full-resolution image
+      if (this.fileHandler && typeof this.fileHandler.downloadFile === 'function') {
+        console.log(`💾 Auto-downloading to: ${downloadLocation}/${fileName}`);
+        await this.fileHandler.downloadFile(this.enhancedImage, fileName);
+        
+        // Silent auto-download - no notification to avoid spam
+        console.log(`✅ Image auto-downloaded to ${downloadLocation}/${fileName}`);
+      } else {
+        // Fallback: create download using blob to prevent browser navigation
+        console.log(`💾 Auto-downloading via blob method: ${fileName}`);
+        try {
+          // Convert data URL to blob to prevent browser navigation
+          const dataUrl = this.enhancedImage.dataUrl;
+          const byteString = atob(dataUrl.split(',')[1]);
+          const mimeString = dataUrl.split(',')[0].split(':')[1].split(';')[0];
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+          }
+          
+          const blob = new Blob([ab], { type: mimeString });
+          const url = URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          link.style.display = 'none';
+          
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Clean up the object URL
+          setTimeout(() => {
+            URL.revokeObjectURL(url);
+          }, 100);
+          
+          // Silent auto-download - no notification to avoid spam
+          console.log(`✅ Image auto-downloaded: ${fileName}`);
+          
+        } catch (error) {
+          console.error('Blob download failed:', error);
+          this.showNotification(
+            'Auto-download failed. You can still download manually.',
+            'warning'
+          );
+        }
+      }
+      
+      // Update file status to show completion
+      this.updateFileStatus(fileName, downloadLocation, 'complete');
+      
+    } catch (error) {
+      console.error('❌ Auto-save failed:', error);
       this.showNotification(
-        `✅ Processing complete! Full-resolution image ready for download.`,
-        'success'
-      );
-    } else {
-      // Browser-based results
-      console.log('✅ Browser-based result - ready for download');
-      this.showNotification(
-        `✅ Processing complete! Full-resolution image ready for download.`,
-        'success'
+        'Auto-download failed. You can still download manually.',
+        'warning'
       );
     }
-    
-    // Update file status to show completion without triggering download
-    this.updateFileStatus(fileName, downloadLocation, 'complete');
     
     // Add notification in the enhanced info about download location
     this.addDownloadLocationInfo(downloadLocation);

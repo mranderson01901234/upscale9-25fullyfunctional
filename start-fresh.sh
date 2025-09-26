@@ -56,7 +56,7 @@ echo "🚀 Starting fresh servers..."
 
 # Start Pro Engine Desktop Service (port 3006) with 1.5GB file support
 echo "🔧 Starting Pro Engine Desktop Service on port 3006 (1.5GB file support)..."
-cd /home/mranderson/desktophybrid/pro-engine-desktop/service
+cd /home/mranderson/Desktop/upscalerapplication/upscale9-25fullyfunctional/pro-engine-desktop/service
 PORT=3006 node --expose-gc --max-old-space-size=8192 server.js &
 PRO_ENGINE_PID=$!
 echo "✅ Pro Engine started (PID: $PRO_ENGINE_PID)"
@@ -66,7 +66,7 @@ sleep 5
 
 # Start Pro Upscaler Server (port 3002) 
 echo "🔧 Starting Pro Upscaler Server on port 3002..."
-cd /home/mranderson/desktophybrid/pro-upscaler/server
+cd /home/mranderson/Desktop/upscalerapplication/upscale9-25fullyfunctional/pro-upscaler/server
 PORT=3002 node server.js &
 UPSCALER_PID=$!
 echo "✅ Pro Upscaler Server started (PID: $UPSCALER_PID)"
@@ -76,7 +76,7 @@ sleep 3
 
 # Start Client HTTP Server (port 8080)
 echo "🔧 Starting Client HTTP Server on port 8080..."
-cd /home/mranderson/desktophybrid/pro-upscaler/client
+cd /home/mranderson/Desktop/upscalerapplication/upscale9-25fullyfunctional/pro-upscaler/client
 python3 -m http.server 8080 &
 CLIENT_PID=$!
 echo "✅ Client HTTP Server started (PID: $CLIENT_PID)"

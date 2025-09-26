@@ -290,6 +290,30 @@
                             </div>
                         </div>
 
+                        <!-- Processing Timer -->
+                        <div class="processing-timer" id="processing-timer" style="
+                            display: none;
+                            align-items: center;
+                            gap: 0.5rem;
+                            padding: 0.75rem 1rem;
+                            margin-bottom: 0.75rem;
+                            border-radius: 0.5rem;
+                            background: linear-gradient(135deg, rgba(255, 165, 0, 0.15), rgba(255, 140, 0, 0.1));
+                            border: 1px solid rgba(255, 165, 0, 0.3);
+                            color: #ffa500;
+                            font-size: 0.875rem;
+                            font-weight: 600;
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                            letter-spacing: 0.02em;
+                            box-shadow: 0 2px 8px rgba(255, 165, 0, 0.2);
+                        ">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                                <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span id="timer-text">Processing: 0.0s</span>
+                        </div>
+
                         <!-- Processing Settings -->
                         <div class="status-section" style="padding: 8px; background: #1a1a1a; border: 1px solid #333333; border-radius: 8px; margin-bottom: 6px;">
                             <div class="section-title" style="font-size: 12px; margin-bottom: 8px;">EXPORT SETTING</div>
@@ -297,13 +321,15 @@
                                 <div class="setting-item" style="gap: 4px; width: 100%;">
                                     <label class="setting-label" for="scale-factor" style="font-size: 12px; font-weight: 600;">Scale Factor</label>
                                     <select id="scale-factor" class="setting-select" style="padding: 8px 10px; font-size: 12px; height: 34px; width: 100%; min-width: 200px;">
-                                        <option value="2x" selected>2x Enhancement</option>
+                                        <option value="4x" selected>4x Enhancement</option>
                                         <option value="4x">4x Enhancement</option>
                                         <option value="6x">6x Enhancement</option>
                                         <option value="8x">8x Enhancement</option>
                                         <option value="10x">10x Enhancement</option>
                                         <option value="12x">12x Enhancement</option>
                                         <option value="15x">15x Maximum</option>
+                                        <option value="20x">20x Ultra</option>
+                                        <option value="25x">25x Extreme</option>
                                     </select>
                                 </div>
                                 <div class="setting-item" style="gap: 4px; width: 100%;">
@@ -311,6 +337,7 @@
                                     <select id="output-format" class="setting-select" style="padding: 8px 10px; font-size: 12px; height: 34px; width: 100%; min-width: 200px;">
                                         <option value="jpeg" selected>JPEG</option>
                                         <option value="png">PNG</option>
+                                        <option value="webp">WebP</option>
                                         <option value="tiff">TIFF</option>
                                     </select>
                                 </div>

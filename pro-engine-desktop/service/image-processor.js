@@ -572,9 +572,13 @@ class ImageProcessor {
             console.log('🎯 Target dimensions:', targetWidth, 'x', targetHeight);
             console.log('🎯 Target pixels:', targetPixels.toLocaleString());
             
-            // Get optimal settings for this image
+            // Get optimal settings for this image - respect user's format preference
             const optimalConcurrency = this.getOptimalConcurrency(targetPixels);
-            const outputSettings = this.getOptimalOutputSettings(targetPixels, metadata.format, {});
+            const userPreferences = {
+                outputFormat: format,
+                quality: quality
+            };
+            const outputSettings = this.getOptimalOutputSettings(targetPixels, metadata.format, userPreferences);
             const resizeSettings = this.getOptimalResizeSettings(targetPixels);
             
             // Apply optimizations
@@ -764,9 +768,13 @@ class ImageProcessor {
             const useAI = this.aiEnhancer.shouldUseAIEnhancement(metadata, options);
             const useProgressive = this.shouldUseProgressiveScaling(scaleFactor, targetPixels);
             
-            // Get optimal settings
+            // Get optimal settings - respect user's format preference
             const optimalConcurrency = this.getOptimalConcurrency(targetPixels);
-            const outputSettings = this.getOptimalOutputSettings(targetPixels, metadata.format, {});
+            const userPreferences = {
+                outputFormat: options.outputFormat || options.format,
+                quality: options.quality || 95
+            };
+            const outputSettings = this.getOptimalOutputSettings(targetPixels, metadata.format, userPreferences);
             const resizeSettings = this.getOptimalResizeSettings(targetPixels);
             
             sharp.concurrency(optimalConcurrency);
@@ -990,7 +998,7 @@ class ImageProcessor {
             
             // Initialize GPU tiled processor for large images
             const GPUTiledProcessor = require('./gpu-tiled-processor');
-            this.gpuTiledProcessor = new GPUTiledProcessor();
+            this.gpuTiledProcessor = new GPUTiledProcessor(this.gpuProcessor);
             await this.gpuTiledProcessor.initialize();
             console.log('✅ GPU tiled processor initialized - REAL TILED GPU PROCESSING');
             
@@ -1082,6 +1090,14 @@ class ImageProcessor {
             };
         }
 
+        // For scale factors > 2x, use progressive 2x scaling (browser-identical approach)
+        if (scaleFactor > 2) {
+            return {
+                method: 'progressive-2x',
+                reason: `Scale factor ${scaleFactor}x - using progressive 2x scaling (browser-identical approach with unlimited memory)`
+            };
+        }
+
         // For large scale factors, GPU is usually better
         if (scaleFactor >= 8) {
             return {
@@ -1132,13 +1148,13 @@ class ImageProcessor {
             
             let processedImage;
             
-            // PRIORITY 1: Use GPU TILED processing for scale factors > 4.1x (bypasses memory wall)
-            if (this.gpuTiledProcessor && scaleFactor > 4.1) {
-                console.log(`🚀 Using GPU TILED processing for ${scaleFactor}x scaling (bypassing 4.1x memory wall)`);
+            // PRIORITY 1: Use PROGRESSIVE 2X SCALING for all scale factors > 2x (browser-identical approach)
+            if (scaleFactor > 2) {
+                console.log(`🚀 Using PROGRESSIVE 2X SCALING for ${scaleFactor}x scaling (browser-identical approach)`);
                 try {
-                    processedImage = await this.processWithGPUTiled(imageBuffer, scaleFactor, format, quality, onProgress, options);
+                    processedImage = await this.processWithProgressive2X(imageBuffer, scaleFactor, format, quality, onProgress, options);
                 } catch (error) {
-                    console.warn(`⚠️ GPU tiled processing failed for ${scaleFactor}x:`, error.message);
+                    console.warn(`⚠️ Progressive 2x scaling failed for ${scaleFactor}x:`, error.message);
                     // Fall back to standard GPU or CPU
                     if (this.gpuAvailable && this.gpuProcessor) {
                         console.log(`🔄 Falling back to standard GPU processing...`);
@@ -1190,7 +1206,117 @@ class ImageProcessor {
     }
 
     /**
-     * Process image using GPU TILED processing (PRIMARY METHOD for > 4.1x)
+     * Process image using PROGRESSIVE 2X SCALING (BROWSER-IDENTICAL APPROACH)
+     * This replicates the browser's ultra-fast progressive scaling but with unlimited memory
+     */
+    async processWithProgressive2X(imageBuffer, scaleFactor, format, quality, onProgress, options = {}) {
+        console.log('🚀 Processing with PROGRESSIVE 2X SCALING (browser-identical approach)...');
+        
+        if (onProgress) onProgress(5, 'Initializing progressive 2x scaling...');
+        
+        try {
+            // Get original image metadata - disable pixel limits for extreme upscales
+            const metadata = await sharp(imageBuffer, {
+                limitInputPixels: false,
+                unlimited: true,
+                failOnError: false
+            }).metadata();
+            const originalWidth = metadata.width;
+            const originalHeight = metadata.height;
+            
+            console.log(`📊 Progressive scaling: ${originalWidth}×${originalHeight} → ${originalWidth * scaleFactor}×${originalHeight * scaleFactor} (${scaleFactor}x)`);
+            
+            // Calculate total steps for progress tracking
+            const totalSteps = Math.ceil(Math.log2(scaleFactor));
+            console.log(`🔄 Progressive steps: ${totalSteps} iterations (2x per step)`);
+            
+            let currentBuffer = imageBuffer;
+            let currentWidth = originalWidth;
+            let currentHeight = originalHeight;
+            let step = 0;
+            
+            // Progressive 2x scaling - IDENTICAL to browser approach
+            while (currentWidth * 2 <= originalWidth * scaleFactor || currentHeight * 2 <= originalHeight * scaleFactor) {
+                step++;
+                const nextWidth = Math.min(currentWidth * 2, originalWidth * scaleFactor);
+                const nextHeight = Math.min(currentHeight * 2, originalHeight * scaleFactor);
+                
+                const progressBase = 10 + (step / totalSteps) * 80;
+                if (onProgress) {
+                    onProgress(progressBase, `Progressive step ${step}/${totalSteps}: ${currentWidth}×${currentHeight} → ${nextWidth}×${nextHeight}`);
+                }
+                
+                console.log(`📊 Progressive step ${step}: ${currentWidth}×${currentHeight} → ${nextWidth}×${nextHeight}`);
+                
+                // Use Sharp for high-quality 2x scaling (equivalent to browser's drawImage)
+                // Disable pixel limits for extreme upscales
+                currentBuffer = await sharp(currentBuffer, {
+                    limitInputPixels: false,
+                    unlimited: true,
+                    failOnError: false
+                })
+                    .resize(nextWidth, nextHeight, {
+                        kernel: sharp.kernel.lanczos3,
+                        fit: 'fill'
+                    })
+                    .png({ quality: 95 })
+                    .toBuffer();
+                
+                currentWidth = nextWidth;
+                currentHeight = nextHeight;
+                
+                // Force garbage collection to manage memory
+                if (global.gc) {
+                    global.gc();
+                }
+            }
+            
+            // Final format conversion
+            if (onProgress) onProgress(90, 'Applying final format...');
+            
+            let finalBuffer;
+            try {
+                if (format === 'jpeg' || format === 'jpg') {
+                    finalBuffer = await sharp(currentBuffer).jpeg({ quality: quality }).toBuffer();
+                } else if (format === 'png') {
+                    finalBuffer = await sharp(currentBuffer).png({ quality: quality }).toBuffer();
+                } else if (format === 'webp') {
+                    finalBuffer = await sharp(currentBuffer).webp({ quality: quality }).toBuffer();
+                } else if (format === 'tiff') {
+                    finalBuffer = await sharp(currentBuffer).tiff({ quality: quality }).toBuffer();
+                } else {
+                    finalBuffer = currentBuffer; // Keep as PNG
+                }
+            } catch (formatError) {
+                console.warn(`⚠️ Format ${format} failed, falling back to PNG:`, formatError.message);
+                finalBuffer = await sharp(currentBuffer).png({ quality: 95 }).toBuffer();
+                format = 'png';
+            }
+            
+            if (onProgress) onProgress(100, 'Progressive scaling complete!');
+            
+            console.log(`✅ Progressive 2x scaling complete: ${step} steps, final size: ${currentWidth}×${currentHeight}`);
+            
+            return {
+                buffer: finalBuffer,
+                format: format,
+                extension: format,
+                width: currentWidth,
+                height: currentHeight,
+                processingMethod: 'progressive-2x',
+                algorithm: 'lanczos3',
+                stepsProcessed: step,
+                totalSteps: totalSteps
+            };
+            
+        } catch (error) {
+            console.error('❌ Progressive 2x scaling failed:', error);
+            throw new Error(`Progressive 2x scaling failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Process image using GPU TILED processing (LEGACY METHOD - now fallback only)
      */
     async processWithGPUTiled(imageBuffer, scaleFactor, format, quality, onProgress, options = {}) {
         console.log('🚀 Processing with GPU TILED processing...');
@@ -1369,30 +1495,46 @@ class ImageProcessor {
             
             if (onProgress) onProgress(70, 'Applying output format...');
             
-            // Apply format and quality settings
-            if (format === 'jpeg' || format === 'jpg') {
-                sharpInstance = sharpInstance.jpeg({ quality: quality });
-            } else if (format === 'png') {
-                sharpInstance = sharpInstance.png({ quality: quality });
-            } else if (format === 'webp') {
-                sharpInstance = sharpInstance.webp({ quality: quality });
-            } else if (format === 'tiff') {
-                sharpInstance = sharpInstance.tiff({ quality: quality });
+            // Apply format and quality settings with error handling for large images
+            try {
+                if (format === 'jpeg' || format === 'jpg') {
+                    sharpInstance = sharpInstance.jpeg({ quality: quality });
+                } else if (format === 'png') {
+                    sharpInstance = sharpInstance.png({ quality: quality });
+                } else if (format === 'webp') {
+                    sharpInstance = sharpInstance.webp({ quality: quality });
+                } else if (format === 'tiff') {
+                    sharpInstance = sharpInstance.tiff({ quality: quality });
+                }
+                
+                if (onProgress) onProgress(90, 'Finalizing CPU result...');
+                
+                const buffer = await sharpInstance.toBuffer();
+                
+                return {
+                    buffer: buffer,
+                    format: format,
+                    width: targetWidth,
+                    height: targetHeight,
+                    processingMethod: 'cpu-direct',
+                    algorithm: 'lanczos3'
+                };
+            } catch (formatError) {
+                console.warn(`⚠️ Format ${format} failed for large image, falling back to PNG:`, formatError.message);
+                
+                // Fallback to PNG for large images
+                sharpInstance = sharpInstance.png({ quality: 95 });
+                const buffer = await sharpInstance.toBuffer();
+                
+                return {
+                    buffer: buffer,
+                    format: 'png',
+                    width: targetWidth,
+                    height: targetHeight,
+                    processingMethod: 'cpu-direct-fallback',
+                    algorithm: 'lanczos3'
+                };
             }
-            
-            if (onProgress) onProgress(90, 'Finalizing CPU result...');
-            
-            const buffer = await sharpInstance.toBuffer();
-            
-            return {
-                buffer: buffer,
-                format: format,
-                extension: format,
-                width: targetWidth,
-                height: targetHeight,
-                processingMethod: 'cpu-direct',
-                algorithm: 'lanczos3'
-            };
             
         } catch (error) {
             console.error('❌ CPU processing failed:', error);
